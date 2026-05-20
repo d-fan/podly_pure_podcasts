@@ -13,6 +13,7 @@ from flask import Flask
 
 from app.extensions import db
 from app.models import ProcessingJob, TranscriptSegment
+from app.writer.client import writer_client
 from podcast_processor.ad_classifier import AdClassifier
 from podcast_processor.audio_processor import AudioProcessor
 from podcast_processor.podcast_downloader import PodcastDownloader
@@ -40,6 +41,22 @@ torch_mock.device = MagicMock()
 # Pre-mock the modules to avoid imports during test collection
 sys.modules["whisper"] = whisper_mock
 sys.modules["torch"] = torch_mock
+
+
+@pytest.fixture(autouse=True)
+def mock_writer_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Mock the writer_client to prevent real database interactions and IPC calls."""
+    mock = MagicMock()
+    mock.action.return_value = MagicMock(success=True, data={})
+    mock.update.return_value = MagicMock(success=True)
+    mock.insert.return_value = MagicMock(success=True)
+    monkeypatch.setattr("app.writer.client.writer_client", mock)
+    # Also patch it in specific modules where it might have been imported before patching
+    monkeypatch.setattr(
+        "podcast_processor.processing_status_manager.writer_client", mock
+    )
+    monkeypatch.setattr("podcast_processor.boundary_refiner.writer_client", mock)
+    return mock
 
 
 @pytest.fixture
